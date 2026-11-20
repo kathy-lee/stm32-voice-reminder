@@ -16,3 +16,10 @@ target_link_libraries(test_ima_adpcm PRIVATE ima_adpcm)
 target_compile_definitions(test_ima_adpcm PRIVATE
     VECTOR_DIR="${CMAKE_SOURCE_DIR}/tests/vectors")
 add_test(NAME ima_adpcm COMMAND test_ima_adpcm)
+
+add_library(pcm_dac STATIC codec/pcm_dac.c)
+target_include_directories(pcm_dac PUBLIC codec)
+
+add_executable(test_pcm_dac tests/host/test_pcm_dac.c)
+target_link_libraries(test_pcm_dac PRIVATE pcm_dac)
+add_test(NAME pcm_dac COMMAND test_pcm_dac)

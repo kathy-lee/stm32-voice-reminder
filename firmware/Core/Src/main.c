@@ -26,6 +26,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "pcm_dac.h"
+
+#include <stdio.h>
 
 /* USER CODE END Includes */
 
@@ -48,8 +51,22 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-/* Smoke test: the USER button switches LD2 between slow and fast blinking. */
-static volatile uint8_t fast_blink;
+/* M1 tone test: a 500 Hz sine on PA4 (DAC OUT1). Each press of the USER
+ * button moves to the next software gain, so a default can be chosen by ear. */
+#define TONE_SAMPLES 16 /* one period: 8000 Hz / 16 = 500 Hz */
+
+static const int16_t sine_period[TONE_SAMPLES] = {
+       0,  12539,  23170,  30273,  32767,  30273,  23170,  12539,
+       0, -12539, -23170, -30273, -32767, -30273, -23170, -12539,
+};
+
+/* Q15 gains: off, 0.03, 0.05, 0.08, 0.12, 0.20 */
+static const uint16_t gain_steps_q15[] = {0, 983, 1638, 2621, 3932, 6554};
+#define GAIN_STEPS (sizeof gain_steps_q15 / sizeof gain_steps_q15[0])
+
+static uint16_t dac_buffer[TONE_SAMPLES];
+static uint8_t gain_step;
+static volatile uint8_t button_pressed;
 
 /* USER CODE END PV */
 
@@ -61,6 +78,21 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* Refills the looping DAC buffer at the given gain and reports it over UART. */
+static void tone_set_gain(uint16_t gain_q15)
+{
+  char msg[32];
+  unsigned hundredths = (gain_q15 * 100u + PCM_DAC_GAIN_UNITY / 2) / PCM_DAC_GAIN_UNITY;
+  int len;
+
+  for (int i = 0; i < TONE_SAMPLES; i++)
+  {
+    dac_buffer[i] = pcm_to_dac(sine_period[i], gain_q15);
+  }
+
+  len = snprintf(msg, sizeof msg, "gain %u.%02u\r\n", hundredths / 100, hundredths % 100);
+  HAL_UART_Transmit(&huart2, (uint8_t *)msg, (uint16_t)len, 100);
+}
 
 /* USER CODE END 0 */
 
@@ -98,6 +130,18 @@ int main(void)
   MX_TIM6_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  /* Start silent, with the DAC resting at mid-scale, then let TIM6 clock
+   * the looping buffer out at 8 kHz. */
+  tone_set_gain(gain_steps_q15[gain_step]);
+  if (HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *)dac_buffer, TONE_SAMPLES,
+                        DAC_ALIGN_12B_R) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_Base_Start(&htim6) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
   /* USER CODE END 2 */
 
@@ -116,12 +160,24 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     static uint32_t last_toggle;
-    uint32_t half_period_ms = fast_blink ? 100 : 500;
+    static uint32_t last_press;
 
-    if (HAL_GetTick() - last_toggle >= half_period_ms)
+    if (HAL_GetTick() - last_toggle >= 500)
     {
       last_toggle = HAL_GetTick();
       BSP_LED_Toggle(LED2);
+    }
+
+    if (button_pressed)
+    {
+      button_pressed = 0;
+      /* Ignore contact bounce: accept at most one press every 200 ms. */
+      if (HAL_GetTick() - last_press >= 200)
+      {
+        last_press = HAL_GetTick();
+        gain_step = (uint8_t)((gain_step + 1) % GAIN_STEPS);
+        tone_set_gain(gain_steps_q15[gain_step]);
+      }
     }
   }
   /* USER CODE END 3 */
@@ -179,7 +235,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
   if (GPIO_Pin == USER_BUTTON_PIN)
   {
-    fast_blink = !fast_blink;
+    button_pressed = 1;
   }
 }
 
