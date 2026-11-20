@@ -48,6 +48,8 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+/* Smoke test: the USER button switches LD2 between slow and fast blinking. */
+static volatile uint8_t fast_blink;
 
 /* USER CODE END PV */
 
@@ -113,6 +115,14 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    static uint32_t last_toggle;
+    uint32_t half_period_ms = fast_blink ? 100 : 500;
+
+    if (HAL_GetTick() - last_toggle >= half_period_ms)
+    {
+      last_toggle = HAL_GetTick();
+      BSP_LED_Toggle(LED2);
+    }
   }
   /* USER CODE END 3 */
 }
@@ -165,6 +175,13 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+  if (GPIO_Pin == USER_BUTTON_PIN)
+  {
+    fast_blink = !fast_blink;
+  }
+}
 
 /* USER CODE END 4 */
 
