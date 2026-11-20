@@ -1,20 +1,9 @@
 #include "ima_adpcm.h"
 
+#include "check.h"
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-
-static int failures;
-
-#define CHECK_INT(want, got)                                                  \
-    do {                                                                      \
-        long w_ = (want), g_ = (got);                                         \
-        if (w_ != g_) {                                                       \
-            printf("  FAIL %s:%d: %s: want %ld, got %ld\n", __func__,         \
-                   __LINE__, #got, w_, g_);                                   \
-            failures++;                                                       \
-        }                                                                     \
-    } while (0)
 
 /* Catches: header sample not emitted, or read with the wrong byte order. */
 static void header_only_block_yields_its_first_sample(void)
