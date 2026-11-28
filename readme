@@ -1,88 +1,105 @@
 ## Steps to reproduce
 ### Step 1. CubeMX config and code generation
 1. Create the project from the board
-1. Start CubeMX: run ~/STM32CubeMX/STM32CubeMX.
-2. On the home screen, under "Start My project from ST Board", click ACCESS TO BOARD SELECTOR.
-3. Type NUCLEO-F446RE in the "Commercial Part Number" search box and click the board in the list at the bottom.
-4. Click Start Project (top right).
-5. When asked "Initialize all peripherals with their default Mode?", click Yes.
+a. Start CubeMX: run ~/STM32CubeMX/STM32CubeMX.
+b. On the home screen, under "Start My project from ST Board", click ACCESS TO BOARD SELECTOR.
+c. Type NUCLEO-F446RE in the "Commercial Part Number" search box and click the board in the list at the bottom.
+d. Click Start Project (top right).
+e. When asked "Initialize all peripherals with their default Mode?", click Yes.
 
-You should now see the chip drawing on the Pinout & Configuration tab, with the categories listed on the left.
+Expected to see the chip drawing on the Pinout & Configuration tab, with the categories listed on the left.
 
 2. Enable the 32 kHz crystal
-1. Open System Core → RCC.
-2. Set Low Speed Clock (LSE) to Crystal/Ceramic Resonator.
-3. Leave High Speed Clock (HSE) as it is.
+a. Open System Core → RCC.
+b. Set Low Speed Clock (LSE) to Crystal/Ceramic Resonator.
+c. Leave High Speed Clock (HSE) as it is.
 
 3. Configure the DAC
-1. Open Analog → DAC.
-2. Tick OUT1 Configuration. Do not tick OUT2 (that is PA5, the LED). Pin PA4 should turn green on the chip.
-3. In the Parameter Settings tab below, set:
+a. Open Analog → DAC.
+b. Tick OUT1 Configuration. Do not tick OUT2 (that is PA5, the LED). Pin PA4 should turn green on the chip.
+c. In the Parameter Settings tab below, set:
    - Output Buffer: Enable
    - Trigger: Timer 6 Trigger Out event
    - Wave generation mode: Disabled
-4. Switch to the DMA Settings tab, click Add, and choose DAC1 in the new row.
-5. Click that row and set, in the panel below it:
+d. Switch to the DMA Settings tab, click Add, and choose DAC1 in the new row.
+f. Click that row and set, in the panel below it:
    - Mode: Circular
    - Data Width: Half Word for both Peripheral and Memory
    - Leave Direction as Memory To Peripheral and the stream as DMA1 Stream 5
 
 4. Configure the timer
-1. Open Timers → TIM6 and tick Activated.
-2. In Parameter Settings, set:
+a. Open Timers → TIM6 and tick Activated.
+b. In Parameter Settings, set:
    - Prescaler: 0
    - Counter Period: 10499
    - Trigger Event Selection: Update Event
 
 5. Enable the button interrupt
-1. Open System Core → NVIC.
-2. Tick the Enabled box for EXTI line[15:10] interrupts.
+a. Open System Core → NVIC.
+b. Tick the Enabled box for EXTI line[15:10] interrupts.
 
 6. Enable USART2 and check the board pins
-1. Open Connectivity → USART2 and set Mode to Asynchronous. Leave Hardware Flow Control (RS232) on Disable.
-2. In Parameter Settings, confirm Baud Rate 115200, Word Length 8 Bits, Parity None, Stop Bits 1.
-3. Confirm in the pinout view:
+a. Open Connectivity → USART2 and set Mode to Asynchronous. Leave Hardware Flow Control (RS232) on Disable.
+b. In Parameter Settings, confirm Baud Rate 115200, Word Length 8 Bits, Parity None, Stop Bits 1.
+c. Confirm in the pinout view:
    - PA2 and PA3 are green, labelled USART2_TX and USART2_RX.
    - PA4 is green, labelled DAC_OUT1.
    - PA5 is marked [LD1] and PC13 is marked [BUTTON]. Both are reserved by the board support code selected in the start-up window, so they do not appear as ordinary GPIO pins.
 
 7. Check the clock
-1. Click the Clock Configuration tab at the top.
-2. Confirm that PLL Source Mux is on HSI and that APB1 Timer clocks (MHz) on the right shows 84.
+a. Click the Clock Configuration tab at the top.
+b. Confirm that PLL Source Mux is on HSI and that APB1 Timer clocks (MHz) on the right shows 84.
 
 If the APB1 timer clock shows a different number, change the Counter Period in step 4 to that clock in Hz divided by 8000, minus 1 (for example, 84,000,000 / 8000 - 1 = 10499).
 
 8. Set up the project and generate
-1. Click the Project Manager tab, then Project on the left.
-2. Set:
+a. Click the Project Manager tab, then Project on the left.
+b. Set:
    - Project Name: firmware
    - Project Location: <YOUR_PROJECT_DIR>/stm32-voice-reminder
    - Toolchain / IDE: CMake
-3. Click Code Generator on the left and set:
+c. Click Code Generator on the left and set:
    - Select "Copy only the necessary library files"
    - Tick "Generate peripheral initialization as a pair of '.c/.h' files per peripheral"
    - Leave "Keep User Code when re-generating" ticked
-4. Click GENERATE CODE (top right) and close the dialog when it finishes. If CubeMX asks to download the STM32Cube FW_F4 firmware package, click Yes.
+d. Click GENERATE CODE (top right) and close the dialog when it finishes. If CubeMX asks to download the STM32Cube FW_F4 firmware package, click Yes.
 
-You should end up with a firmware/ folder in the repository containing firmware.ioc, CMakeLists.txt, Core/ and Drivers/.
+Expected result: a firmware/ folder in the repository containing firmware.ioc, CMakeLists.txt, Core/ and Drivers/.
 
-9. Connect the board
+### Step 2. The 1st Somke test -- LED blink and button test (commit `3ffeeac`)
+1. Connect the board
 For bench work now, leave JP5 on U5V and plug the Nucleo into the PC by USB; the E5V arrangement is only tested in the last M1 step. The 3972 does not need to be wired yet.
 
-10. Build and flash
+2. Build and flash
 Needs arm-none-eabi-gcc, CMake, Ninja and OpenOCD installed on the PC.
-
-1. Go to the firmware folder:
+a. Go to the firmware folder:
    cd <YOUR_PROJECT_DIR>/stm32-voice-reminder/firmware
-2. Configure the build (only needed once, or after CMake files change):
+b. Configure the build (only needed once, or after CMake files change):
    cmake --preset Debug
-3. Build:
+c. Build:
    cmake --build build/Debug
    The last lines show the memory use (about 12.3 KB of FLASH with the smoke test). The result is build/Debug/firmware.elf.
-4. Flash, verify and restart the board:
+d. Flash, verify and restart the board:
    openocd -f board/st_nucleo_f4.cfg -c "program build/Debug/firmware.elf verify reset exit"
    Look for "** Programming Finished **" and "** Verified OK **" in the output. The "Unable to match requested speed" lines are harmless.
 
 If the build fails, do not flash: OpenOCD would write the previous firmware.elf again.
 
 Expected result with the smoke test in Core/Src/main.c: the green LD2 blinks about once per second; each press of the blue USER button switches between slow and fast blinking (about five times per second).
+
+### Step 3. The 2nd Smoke test -- DAC tone and gain test (commit `d0a0d7e`)
+Needs the following:
+  1.Adafruit STEMMA Speaker – Plug and Play Audio Amplifier
+  2.Adafruit STEMMA JST-PH 2mm 3-Pin to Female Socket Cable
+
+a. With the USB still unplugged, connect the speaker with the 3-Pin to Female Socket Cable, and connect this cable with the board as following: The red wire is on 5V (CN7 pin 18), the black wire on GND, and the white wire on PA4 (CN7 pin 32). Check the three wires on the Morpho pins, then plug in the USB.
+b. Start the serial monitor: stty -F /dev/ttyACM0 115200 raw -echo && cat /dev/ttyACM0
+c. In `firmware/`, build and flash:
+   - cmake --build build/Debug
+   - openocd -f board/st_nucleo_f4.cfg -c "program build/Debug/firmware.elf verify reset exit"
+d. Press the USER button to step through the gains (0.03 to 0.20), with the trim pot around the middle.
+e. Turn the speaker's trim pot to about the middle to start with.
+
+Expected result:
+- After flashing: silence, LD2 blinking once a second, and gain 0.00 in the serial terminal.
+- Each USER button press: a steady 500 Hz tone getting louder: 0.03, 0.05, 0.08, 0.12, 0.20, then back to 0.00.
