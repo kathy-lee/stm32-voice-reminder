@@ -26,9 +26,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "pcm_dac.h"
+#include "player.h"
 
-#include <stdio.h>
+#include <string.h>
 
 /* USER CODE END Includes */
 
@@ -51,21 +51,17 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-/* M1 tone test: a 500 Hz sine on PA4 (DAC OUT1). Each press of the USER
- * button moves to the next software gain, so a default can be chosen by ear. */
-#define TONE_SAMPLES 16 /* one period: 8000 Hz / 16 = 500 Hz */
+/* M1 playback test: the USER button starts the compiled-in speech clip,
+ * which repeats with a 2 s pause, and stops it again with a short fade. */
+#define PLAYBACK_GAIN_Q15 6554       /* 0.20; tone test was clean up to here */
+#define PAUSE_SAMPLES (2u * 8000u)   /* 2 s at 8 kHz */
+#define DAC_BUFFER_SAMPLES 512       /* two halves of 32 ms each */
 
-static const int16_t sine_period[TONE_SAMPLES] = {
-       0,  12539,  23170,  30273,  32767,  30273,  23170,  12539,
-       0, -12539, -23170, -30273, -32767, -30273, -23170, -12539,
-};
+extern const uint8_t test_clip[];
+extern const size_t test_clip_len;
 
-/* Q15 gains: off, 0.03, 0.05, 0.08, 0.12, 0.20 */
-static const uint16_t gain_steps_q15[] = {0, 983, 1638, 2621, 3932, 6554};
-#define GAIN_STEPS (sizeof gain_steps_q15 / sizeof gain_steps_q15[0])
-
-static uint16_t dac_buffer[TONE_SAMPLES];
-static uint8_t gain_step;
+static uint16_t dac_buffer[DAC_BUFFER_SAMPLES];
+static player_t player;
 static volatile uint8_t button_pressed;
 
 /* USER CODE END PV */
@@ -78,20 +74,22 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-/* Refills the looping DAC buffer at the given gain and reports it over UART. */
-static void tone_set_gain(uint16_t gain_q15)
+static void uart_print(const char *text)
 {
-  char msg[32];
-  unsigned hundredths = (gain_q15 * 100u + PCM_DAC_GAIN_UNITY / 2) / PCM_DAC_GAIN_UNITY;
-  int len;
+  HAL_UART_Transmit(&huart2, (const uint8_t *)text, (uint16_t)strlen(text), 100);
+}
 
-  for (int i = 0; i < TONE_SAMPLES; i++)
-  {
-    dac_buffer[i] = pcm_to_dac(sine_period[i], gain_q15);
-  }
+/* The DMA plays one half of dac_buffer while the other half is refilled. */
+void HAL_DAC_ConvHalfCpltCallbackCh1(DAC_HandleTypeDef *hdac_cb)
+{
+  (void)hdac_cb;
+  player_fill(&player, &dac_buffer[0], DAC_BUFFER_SAMPLES / 2);
+}
 
-  len = snprintf(msg, sizeof msg, "gain %u.%02u\r\n", hundredths / 100, hundredths % 100);
-  HAL_UART_Transmit(&huart2, (uint8_t *)msg, (uint16_t)len, 100);
+void HAL_DAC_ConvCpltCallbackCh1(DAC_HandleTypeDef *hdac_cb)
+{
+  (void)hdac_cb;
+  player_fill(&player, &dac_buffer[DAC_BUFFER_SAMPLES / 2], DAC_BUFFER_SAMPLES / 2);
 }
 
 /* USER CODE END 0 */
@@ -130,10 +128,10 @@ int main(void)
   MX_TIM6_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  /* Start silent, with the DAC resting at mid-scale, then let TIM6 clock
-   * the looping buffer out at 8 kHz. */
-  tone_set_gain(gain_steps_q15[gain_step]);
-  if (HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *)dac_buffer, TONE_SAMPLES,
+  /* Start with the idle player: the DAC rests at mid-scale until the first
+   * button press. TIM6 clocks the buffer out at 8 kHz. */
+  player_fill(&player, dac_buffer, DAC_BUFFER_SAMPLES);
+  if (HAL_DAC_Start_DMA(&hdac, DAC_CHANNEL_1, (uint32_t *)dac_buffer, DAC_BUFFER_SAMPLES,
                         DAC_ALIGN_12B_R) != HAL_OK)
   {
     Error_Handler();
@@ -142,6 +140,7 @@ int main(void)
   {
     Error_Handler();
   }
+  uart_print("ready: press USER to play\r\n");
 
   /* USER CODE END 2 */
 
@@ -175,8 +174,20 @@ int main(void)
       if (HAL_GetTick() - last_press >= 200)
       {
         last_press = HAL_GetTick();
-        gain_step = (uint8_t)((gain_step + 1) % GAIN_STEPS);
-        tone_set_gain(gain_steps_q15[gain_step]);
+        if (player_is_idle(&player))
+        {
+          /* The DMA interrupt also uses the player: keep it out while the
+           * player is set up (one block decode, a few tens of microseconds). */
+          __disable_irq();
+          player_start(&player, test_clip, test_clip_len, PLAYBACK_GAIN_Q15, PAUSE_SAMPLES);
+          __enable_irq();
+          uart_print(player_is_idle(&player) ? "clip invalid\r\n" : "play\r\n");
+        }
+        else
+        {
+          player_stop(&player);
+          uart_print("stop\r\n");
+        }
       }
     }
   }

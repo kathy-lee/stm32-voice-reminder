@@ -46,7 +46,20 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     ${CMAKE_SOURCE_DIR}/../codec/pcm_dac.c
+    ${CMAKE_SOURCE_DIR}/../codec/ima_adpcm.c
+    ${CMAKE_SOURCE_DIR}/../codec/player.c
 )
+
+# The test clip is your own recording and is not in the repository.
+set(TEST_CLIP ${CMAKE_SOURCE_DIR}/../audio/test_clip.c)
+if(NOT EXISTS ${TEST_CLIP})
+    message(FATAL_ERROR
+        "Missing ${TEST_CLIP}\n"
+        "Record a short speech clip (2-5 s), then create it from the repository root with:\n"
+        "  sh tools/encode_clip.sh path/to/recording.wav test_clip\n"
+        "and run the CMake configure step again.")
+endif()
+target_sources(${CMAKE_PROJECT_NAME} PRIVATE ${TEST_CLIP})
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE

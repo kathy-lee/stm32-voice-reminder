@@ -23,3 +23,11 @@ target_include_directories(pcm_dac PUBLIC codec)
 add_executable(test_pcm_dac tests/host/test_pcm_dac.c)
 target_link_libraries(test_pcm_dac PRIVATE pcm_dac)
 add_test(NAME pcm_dac COMMAND test_pcm_dac)
+
+add_library(player STATIC codec/player.c)
+target_include_directories(player PUBLIC codec)
+target_link_libraries(player PUBLIC ima_adpcm pcm_dac)
+
+add_executable(test_player tests/host/test_player.c)
+target_link_libraries(test_player PRIVATE player)
+add_test(NAME player COMMAND test_player)
