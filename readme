@@ -103,3 +103,36 @@ e. Turn the speaker's trim pot to about the middle to start with.
 Expected result:
 - After flashing: silence, LD2 blinking once a second, and gain 0.00 in the serial terminal.
 - Each USER button press: a steady 500 Hz tone getting louder: 0.03, 0.05, 0.08, 0.12, 0.20, then back to 0.00.
+
+### Step 4. ADPCM speech playback with fades and button stop (commit `679a3ce`)
+Uses the same wiring as step 3. Also needs FFmpeg, Python 3 and bc on the PC.
+
+a. Record a short speech clip yourself, 2 to 5 seconds, for example a sentence like "Time to take your medicine". Any format FFmpeg reads works (WAV, MP3, M4A); WAV is best. Leave about half a second of silence before and after the words. Recordings are personal, so the audio/ folder is ignored by Git and you have to provide your own.
+b. Put the recording in the audio/ folder, for example audio/audio_sample.mp3.
+c. From the repository root, encode it to 8 kHz IMA-ADPCM:
+   sh tools/encode_clip.sh audio/audio_sample.mp3 test_clip 1.2
+   - test_clip is the output name; the firmware expects exactly this name.
+   - 1.2 is optional: the number of seconds to cut from the start, here to remove a click at the beginning of the recording. A fourth number, also optional, sets where the clip ends, in seconds.
+   The script prints the peak level and the clip length, and writes to audio/:
+   - test_clip.adpcm: the encoded clip
+   - test_clip_8k.wav: the encoded clip decoded again; listen to it on the PC to hear what the board will play
+   - test_clip.c: the clip as a C array, compiled into the firmware
+d. Run the PC-side tests from the repository root:
+   cmake -S . -B build -G Ninja
+   cmake --build build
+   ctest --test-dir build --output-on-failure
+   All three tests (ima_adpcm, pcm_dac, player) must pass.
+e. With the board connected, start the serial monitor: stty -F /dev/ttyACM0 115200 raw -echo && cat /dev/ttyACM0
+f. In firmware/, configure, build and flash:
+   - cmake --preset Debug
+   - cmake --build build/Debug
+   - openocd -f board/st_nucleo_f4.cfg -c "program build/Debug/firmware.elf verify reset exit"
+   If configuring stops with "Missing .../audio/test_clip.c", step c has not been done.
+g. Press the USER button to play the clip, and press it again to stop.
+
+Expected result:
+- After flashing: silence, LD2 blinking once a second, and "ready: press USER to play" in the serial terminal.
+- First press: "play"; the clip plays and repeats after a 2-second pause until stopped.
+- Next press: "stop"; the sound fades out quickly. Pressing again plays from the beginning.
+- No clicks at the start or end of each repetition or on stop, and no crackle or dropouts during the speech.
+- The speech sounds slightly worse than test_clip_8k.wav on the PC. This is expected, from the small speaker and the unfiltered DAC output, and is not a level problem: turning the trim pot down only makes it quieter.
