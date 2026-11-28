@@ -66,9 +66,9 @@ d. Click GENERATE CODE (top right) and close the dialog when it finishes. If Cub
 
 Expected result: a firmware/ folder in the repository containing firmware.ioc, CMakeLists.txt, Core/ and Drivers/.
 
-### Step 2. The 1st Somke test -- LED blink and button test (commit `3ffeeac`)
+### Step 2. The 1st Smoke test -- LED blink and button test (commit `3ffeeac`)
 1. Connect the board
-For bench work now, leave JP5 on U5V and plug the Nucleo into the PC by USB; the E5V arrangement is only tested in the last M1 step. The 3972 does not need to be wired yet.
+For bench work now, leave JP5 on U5V and plug the Nucleo into the PC by USB; the E5V arrangement is only tested in the last M1 step. The speaker does not need to be wired yet.
 
 2. Build and flash
 Needs arm-none-eabi-gcc, CMake, Ninja and OpenOCD installed on the PC.
@@ -97,8 +97,8 @@ b. Start the serial monitor: stty -F /dev/ttyACM0 115200 raw -echo && cat /dev/t
 c. In `firmware/`, build and flash:
    - cmake --build build/Debug
    - openocd -f board/st_nucleo_f4.cfg -c "program build/Debug/firmware.elf verify reset exit"
-d. Press the USER button to step through the gains (0.03 to 0.20), with the trim pot around the middle.
-e. Turn the speaker's trim pot to about the middle to start with.
+d. Turn the speaker's trim pot to about the middle to start with.
+e. Press the USER button to step through the gains (0.03 to 0.20).
 
 Expected result:
 - After flashing: silence, LD2 blinking once a second, and gain 0.00 in the serial terminal.
